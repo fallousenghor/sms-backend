@@ -23,6 +23,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl1.1-compat
+
 # Install only production dependencies
 COPY package*.json ./
 RUN npm install --omit=dev && npm cache clean --force
