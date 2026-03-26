@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  name         String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  smsCampaigns SmsCampaign[]
+  
+  @@map("users")
+}
+
+model Client {
+  id          String    @id @default(uuid())
+  firstName   String
+  lastName    String
+  phone       String    @unique
+  email       String?
+  tags        String[]  @default([])
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  groups      ClientGroup[]
+  smsLogs     SmsLog[]
+
+  @@map("clients")
+  @@index([phone])
+  @@index([isActive])
+}
+
+model Group {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  color       String?   @default("#3B82F6")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  clients     ClientGroup[]
+  campaigns   SmsCampaign[]
+
+  @@map("groups")
+}
+
+model ClientGroup {
+  clientId    String
+  groupId     String
+  assignedAt  DateTime @default(now())
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([clientId, groupId])
+  @@map("client_groups")
+}
+
+model SmsCampaign {
+  id          String         @id @default(uuid())
+  name        String
+  message     String
+  status      CampaignStatus @default(PENDING)
+  totalCount  Int            @default(0)
+  sentCount   Int            @default(0)
+  failedCount Int            @default(0)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  userId      String
+  groupId     String?
+  user        User           @relation(fields: [userId], references: [id])
+  group       Group?         @relation(fields: [groupId], references: [id])
+  smsLogs     SmsLog[]
+
+  @@map("sms_campaigns")
+  @@index([status])
+  @@index([userId])
+}
+
+model SmsLog {
+  id          String      @id @default(uuid())
+  status      SmsStatus
+  twilioSid   String?
+  errorCode   String?
+  errorMessage String?
+  sentAt      DateTime?
+  createdAt   DateTime    @default(now())
+  campaignId  String
+  clientId    String
+  campaign    SmsCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  client      Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("sms_logs")
+  @@index([campaignId])
+  @@index([clientId])
+  @@index([status])
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum CampaignStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum SmsStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  UNDELIVERED
+}

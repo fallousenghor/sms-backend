@@ -1,0 +1,81 @@
+version: '3.9'
+
+services:
+  # ── API Backend ──────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: sms_bulk_api
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      SMS_BATCH_SIZE: ${SMS_BATCH_SIZE:-10}
+      SMS_BATCH_DELAY_MS: ${SMS_BATCH_DELAY_MS:-1000}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - sms_network
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Local PostgreSQL (dev only — use Neon in production) ─────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: sms_bulk_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sms_bulk
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sms_network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Swagger UI (standalone, for dev) ────────────────────────────────────────
+  swagger:
+    image: swaggerapi/swagger-ui
+    container_name: sms_bulk_swagger
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    environment:
+      URL: http://localhost:3000/api-docs.json
+      SWAGGER_JSON_URL: http://localhost:3000/api-docs.json
+    networks:
+      - sms_network
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+
+networks:
+  sms_network:
+    driver: bridge
